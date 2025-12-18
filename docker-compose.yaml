@@ -1,0 +1,27 @@
+﻿services:
+#  openbook.api:
+#    image: openbook.api
+#    build:
+#      context: .
+#      dockerfile: src/Openbook.Api/Dockerfile
+
+  postgres:
+    image: postgres:16
+    container_name: app-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
