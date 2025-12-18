@@ -1,10 +1,4 @@
 ﻿services:
-#  openbook.api:
-#    image: openbook.api
-#    build:
-#      context: .
-#      dockerfile: src/Openbook.Api/Dockerfile
-
   postgres:
     image: postgres:16
     container_name: app-postgres
