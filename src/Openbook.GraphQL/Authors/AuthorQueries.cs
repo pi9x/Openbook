@@ -8,9 +8,9 @@ namespace Openbook.GraphQL.Authors;
 public class AuthorQueries
 {
     [UsePaging]
+    [UseProjection]
     [UseFiltering]
     [UseSorting]
-    [UseProjection]
     public IQueryable<Author> GetAuthors(ApplicationDbContext db)
     {
         return db.Authors.AsQueryable();

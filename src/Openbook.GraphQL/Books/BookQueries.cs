@@ -8,9 +8,9 @@ namespace Openbook.GraphQL.Books;
 public class BookQueries
 {
     [UsePaging]
+    [UseProjection]
     [UseFiltering]
     [UseSorting]
-    [UseProjection]
     public IQueryable<Book> GetBooks(ApplicationDbContext db)
     {
         return db.Books

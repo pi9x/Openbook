@@ -1,6 +1,9 @@
 {
     "IsEncrypted": false,
     "Values": {
-        "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+        "JwtKey": "super_secret_jwt_key_12345678901qaz@WSX3edc",
+        "JwtIssuer": "your-issuer",
+        "JwtAudience": "your-audience"
     }
 }

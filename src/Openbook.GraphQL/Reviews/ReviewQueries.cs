@@ -8,9 +8,9 @@ namespace Openbook.GraphQL.Reviews;
 public class ReviewQueries
 {
     [UsePaging]
+    [UseProjection]
     [UseFiltering]
     [UseSorting]
-    [UseProjection]
     public IQueryable<Review> GetReviews(ApplicationDbContext db)
     {
         return db.Reviews.AsQueryable();
