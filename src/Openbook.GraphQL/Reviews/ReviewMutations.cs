@@ -18,8 +18,19 @@ public class ReviewMutations
         var review = new Review { ReviewId = new ReviewId(Guid.NewGuid()), BookId = book.BookId, Rating = rating, Content = content };
         book.AddReview(review);
         await db.SaveChangesAsync();
+        
         // Send real-time update to SignalR clients
-        await hubContext.Clients.All.SendAsync("ReviewCreated", review);
+        try 
+        {
+            await hubContext.Clients.All.SendAsync("ReviewCreated", review);
+        } 
+        catch 
+        {
+            // The notification for the created review is not critical and errors can be ignored.
+            // The response should be success even when SignalR is down.
+            // Azure Functions may be terminated immediately after the response is sent, so we should not use fire-and-forget by not awaiting the task.
+        }
+        
         return review;
     }
 
