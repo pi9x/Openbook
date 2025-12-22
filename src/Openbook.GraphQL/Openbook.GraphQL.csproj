@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="HotChocolate.AspNetCore" Version="15.1.11" />
+      <PackageReference Include="HotChocolate.Data.EntityFramework" Version="15.1.11" />
+      <PackageReference Include="Microsoft.Azure.SignalR" Version="1.32.0" />
+      <PackageReference Include="Microsoft.Azure.SignalR.Management" Version="1.32.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Openbook.Domain\Openbook.Domain.csproj" />
+    </ItemGroup>
+
+</Project>

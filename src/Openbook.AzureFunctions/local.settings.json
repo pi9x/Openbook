@@ -1,0 +1,13 @@
+{
+    "IsEncrypted": false,
+    "Values": {
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+        "JwtKey": "super_secret_jwt_key_12345678901qaz@WSX3edc",
+        "JwtIssuer": "your-issuer",
+        "JwtAudience": "your-audience",
+        "Azure__SignalR__ConnectionString": "Endpoint=http://localhost;Port=8888;AccessKey=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH;Version=1.0;",
+        "Azure__SignalR__ServiceMode": "Serverless",
+        "ConnectionStrings__OpenbookDatabase": "Host=localhost;Port=5432;Database=appdb;Username=appuser;Password=apppassword",
+        "ConnectionStrings__IdentityDatabase": "Host=localhost;Port=5432;Database=identitydb;Username=appuser;Password=apppassword"
+    }
+}

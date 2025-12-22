@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yaml" />
+  </Folder>
+  <Project Path="src/Openbook.AzureFunctions/Openbook.AzureFunctions.csproj" />
+  <Project Path="src/Openbook.Domain/Openbook.Domain.csproj" />
+  <Project Path="src/Openbook.GraphQL/Openbook.GraphQL.csproj" />
+  <Project Path="src/Openbook.Identity/Openbook.Identity.csproj" />
+</Solution>
