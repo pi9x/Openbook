@@ -1,4 +1,6 @@
 using System.Text;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
@@ -15,14 +17,23 @@ var host = new HostBuilder()
     })
     .ConfigureServices((context, services) =>
     {
-        services.AddApplicationDbContext();
-        services.AddApplicationIdentityDbContext();
-
         var configuration = context.Configuration;
-        var issuer = configuration["JwtIssuer"] ?? throw new ArgumentNullException("JwtIssuer");
-        var audience = configuration["JwtAudience"] ?? throw new ArgumentNullException("JwtAudience");
-        var secret = configuration["JwtKey"] ?? throw new ArgumentNullException("JwtKey");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        
+        services.AddApplicationDbContext(configuration["ConnectionStrings:OpenbookDatabase"] ?? throw new ArgumentNullException("ConnectionStrings:OpenbookDatabase"));
+        services.AddApplicationIdentityDbContext(configuration["ConnectionStrings:IdentityDatabase"] ?? throw new ArgumentNullException("ConnectionStrings:IdentityDatabase"));
+        
+        services.AddSingleton<IServiceHubContext>(sp =>
+        {
+            var serviceManager = new ServiceManagerBuilder()
+                .WithOptions(o =>
+                {
+                    o.ConnectionString = configuration["Azure:SignalR:ConnectionString"];
+                })
+                .BuildServiceManager();
+            
+            return serviceManager.CreateHubContextAsync("ReviewHub", CancellationToken.None)
+                .GetAwaiter().GetResult();
+        });
 
         services.AddSingleton(new TokenValidationParameters
         {
@@ -30,9 +41,9 @@ var host = new HostBuilder()
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
-            IssuerSigningKey = key
+            ValidIssuer = configuration["JwtIssuer"] ?? throw new ArgumentNullException("JwtIssuer"),
+            ValidAudience = configuration["JwtAudience"] ?? throw new ArgumentNullException("JwtAudience"),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JwtKey"] ?? throw new ArgumentNullException("JwtKey")))
         });
     })
     .AddGraphQLFunction(configure =>

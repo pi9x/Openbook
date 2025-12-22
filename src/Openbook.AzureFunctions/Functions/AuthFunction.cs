@@ -12,7 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using Openbook.Identity;
 using JwtRegisteredClaimNames = Microsoft.IdentityModel.JsonWebTokens.JwtRegisteredClaimNames;
 
-namespace Openbook.AzureFunctions;
+namespace Openbook.AzureFunctions.Functions;
 
 public sealed class AuthFunction(
     UserStore<ApplicationUser, IdentityRole, ApplicationIdentityDbContext> userStore,
@@ -22,16 +22,17 @@ public sealed class AuthFunction(
     [Function("AuthLogin")]
     public async Task<HttpResponseData> Login(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/login")]
-        HttpRequestData req)
+        HttpRequestData req,
+        CancellationToken cancellationToken)
     {
-        var loginRequest = await req.ReadFromJsonAsync<LoginRequest>();
+        var loginRequest = await req.ReadFromJsonAsync<LoginRequest>(cancellationToken: cancellationToken);
         if (loginRequest is null)
             return await BadRequest(req, "Invalid request");
         
         // Use SingleOrDefaultAsync to ensure only one user with the given email exists
         // Performance is negotiable
         var user = await userStore.Users.AsNoTracking()
-            .SingleOrDefaultAsync(u => u.Email == loginRequest.Email);
+            .SingleOrDefaultAsync(u => u.Email == loginRequest.Email, cancellationToken: cancellationToken);
 
         if (user is null)
             return await Unauthorized(req);
@@ -65,7 +66,7 @@ public sealed class AuthFunction(
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
         var response = req.CreateResponse(HttpStatusCode.OK);
-        await response.WriteAsJsonAsync(new { token = jwt });
+        await response.WriteAsJsonAsync(new { token = jwt }, cancellationToken: cancellationToken);
         return response;
     }
 

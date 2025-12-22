@@ -5,10 +5,10 @@ namespace Openbook.Domain;
 
 public static class ServiceRegistration
 {
-    public static IServiceCollection AddApplicationDbContext(this IServiceCollection services)
+    public static IServiceCollection AddApplicationDbContext(this IServiceCollection services, string connectionString)
     {
         services.AddPooledDbContextFactory<ApplicationDbContext>(options =>
-            options.UseNpgsql("Host=localhost;Port=5432;Database=appdb;Username=appuser;Password=apppassword"));
+            options.UseNpgsql(connectionString));
 
         return services;
     }

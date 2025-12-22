@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Azure.SignalR.Management;
 using Microsoft.EntityFrameworkCore;
 using Openbook.Domain;
 using Openbook.Domain.Aggregates.Reviews;
@@ -8,15 +10,16 @@ namespace Openbook.GraphQL.Reviews;
 [ExtendObjectType("Mutation")]
 public class ReviewMutations
 {
-    public async Task<Review?> CreateReview(IDbContextFactory<ApplicationDbContext> factory, BookId bookId, int rating, string? content)
+    public async Task<Review?> CreateReview(IDbContextFactory<ApplicationDbContext> factory, BookId bookId, int rating, string? content, [Service] IServiceHubContext hubContext)
     {
         await using var db = await factory.CreateDbContextAsync();
         var book = await db.Books.FindAsync(bookId);
         if (book == null) return null;
-        var review = new Review { ReviewId = new ReviewId(Guid.NewGuid()), Rating = rating, Content = content };
-        // db.Reviews.Add(review);
+        var review = new Review { ReviewId = new ReviewId(Guid.NewGuid()), BookId = book.BookId, Rating = rating, Content = content };
         book.AddReview(review);
         await db.SaveChangesAsync();
+        // Send real-time update to SignalR clients
+        await hubContext.Clients.All.SendAsync("ReviewCreated", review);
         return review;
     }
 

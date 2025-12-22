@@ -7,10 +7,10 @@ namespace Openbook.Identity;
 
 public static class ServiceRegistration
 {
-    public static IServiceCollection AddApplicationIdentityDbContext(this IServiceCollection services)
+    public static IServiceCollection AddApplicationIdentityDbContext(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<ApplicationIdentityDbContext>(options =>
-            options.UseNpgsql("Host=localhost;Port=5432;Database=identitydb;Username=appuser;Password=apppassword"));
+            options.UseNpgsql(connectionString));
 
         services.AddScoped<PasswordHasher<ApplicationUser>>();
         services.AddScoped<UserStore<ApplicationUser, IdentityRole, ApplicationIdentityDbContext>>();

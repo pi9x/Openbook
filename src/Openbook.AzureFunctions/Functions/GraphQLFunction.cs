@@ -3,7 +3,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Openbook.AzureFunctions.Authorization;
 
-namespace Openbook.AzureFunctions;
+namespace Openbook.AzureFunctions.Functions;
 
 public class GraphQLFunction(IGraphQLRequestExecutor executor)
 {

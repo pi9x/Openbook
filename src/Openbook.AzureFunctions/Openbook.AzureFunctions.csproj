@@ -17,6 +17,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.51.0" />
         <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.3.0" />
+        <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.SignalRService" Version="2.0.1" />
         <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
         <PackageReference Include="HotChocolate.AzureFunctions.IsolatedProcess" Version="15.1.11" />
         <PackageReference Include="HotChocolate.Types.Analyzers" Version="15.1.11">

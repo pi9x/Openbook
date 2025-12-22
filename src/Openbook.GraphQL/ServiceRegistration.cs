@@ -1,4 +1,5 @@
 using HotChocolate.Execution.Configuration;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Openbook.Domain;
 using Openbook.Domain.Aggregates.Authors;
