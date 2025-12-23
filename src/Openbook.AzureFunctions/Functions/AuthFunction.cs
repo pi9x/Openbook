@@ -66,7 +66,7 @@ public sealed class AuthFunction(
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
         var response = req.CreateResponse(HttpStatusCode.OK);
-        await response.WriteAsJsonAsync(new { token = jwt }, cancellationToken: cancellationToken);
+        await response.WriteAsJsonAsync(new { token = jwt, name = user.Name, email = user.Email }, cancellationToken: cancellationToken);
         return response;
     }
 

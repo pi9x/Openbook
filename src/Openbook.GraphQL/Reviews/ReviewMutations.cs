@@ -22,7 +22,13 @@ public class ReviewMutations
         // Send real-time update to SignalR clients
         try 
         {
-            await hubContext.Clients.All.SendAsync("ReviewCreated", review);
+            await hubContext.Clients.All.SendAsync("ReviewCreated", new
+            {
+                ReviewId = review.ReviewId.Value,
+                BookId = review.BookId.Value,
+                review.Rating,
+                review.Content
+            });
         } 
         catch 
         {

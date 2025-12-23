@@ -10,7 +10,7 @@ public class SignalRNegotiate(IConfiguration configuration)
 {
     [Function("negotiate")]
     public async Task<HttpResponseData> Negotiate(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequestData req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get")] HttpRequestData req,
         FunctionContext executionContext,
         CancellationToken cancellationToken)
     {
@@ -28,7 +28,7 @@ public class SignalRNegotiate(IConfiguration configuration)
         }
         
         var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
-        await response.WriteStringAsync(negotiateResponse.AccessToken ?? "No access token", cancellationToken);
+        await response.WriteAsJsonAsync(new { token = negotiateResponse.AccessToken, error = negotiateResponse.Error }, cancellationToken);
         return response;
     }
 }

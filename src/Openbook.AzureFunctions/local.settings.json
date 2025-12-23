@@ -9,5 +9,10 @@
         "Azure__SignalR__ServiceMode": "Serverless",
         "ConnectionStrings__OpenbookDatabase": "Host=localhost;Port=5432;Database=appdb;Username=appuser;Password=apppassword",
         "ConnectionStrings__IdentityDatabase": "Host=localhost;Port=5432;Database=identitydb;Username=appuser;Password=apppassword"
+    },
+    "Host": {
+        "LocalHttpPort": 7071,
+        "CORS": "http://localhost:5037,https://localhost:7265",
+        "CORSCredentials": true
     }
 }
