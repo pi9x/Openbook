@@ -1,0 +1,116 @@
+@page "/login"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@using System.Net.Http.Json
+@using Openbook.Wasm.Services
+@inject AuthStateService AuthStateService
+@inject SignalRService SignalRService
+
+<h3>Login</h3>
+
+@if (_success)
+{
+    <div class="alert alert-success">Login successful!</div>
+}
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<EditForm Model="_loginModel" OnValidSubmit="HandleLogin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="mb-3">
+        <label>Email</label>
+        <InputText class="form-control" @bind-Value="_loginModel.Email" />
+    </div>
+    <div class="mb-3">
+        <label>Password</label>
+        <InputText class="form-control" @bind-Value="_loginModel.Password" type="password" />
+    </div>
+    <button class="btn btn-primary" type="submit" disabled="@_loading">Login</button>
+</EditForm>
+
+@code {
+    private LoginModel _loginModel = new();
+    private bool _loading;
+    private bool _success;
+    private string? _error;
+
+    private async Task HandleLogin()
+    {
+        _loading = true;
+        _error = null;
+        _success = false;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/auth/login", _loginModel);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<LoginResult>();
+                if (result is not null && !string.IsNullOrEmpty(result.Token))
+                {
+                    await JS.InvokeVoidAsync("localStorage.setItem", "jwt", result.Token);
+                    await AuthStateService.SetAuthAsync(result.Name, result.Email);
+                    Http.SetJwtAuthorizationHeader(result.Token);
+                    // Negotiate SignalR
+                    var negotiateResponse = await Http.GetAsync("/api/negotiate");
+                    if (negotiateResponse.IsSuccessStatusCode)
+                    {
+                        var negotiate = await negotiateResponse.Content.ReadFromJsonAsync<NegotiateResponse>();
+                        if (!string.IsNullOrEmpty(negotiate?.Error))
+                        {
+                            _error = $"SignalR negotiation failed: {negotiate.Error}";
+                        }
+                        else if (!string.IsNullOrEmpty(negotiate?.Token))
+                        {
+                            // Use Azure SignalR URL for production, or local simulation for development
+#if DEBUG
+                            var signalRUrl = "http://localhost:8888/client/?hub=ReviewHub";
+#else
+                            var signalRUrl = "<AZURE_SIGNALR_URL>";
+#endif
+                            await SignalRService.ConnectAsync(signalRUrl, negotiate.Token);
+                        }
+                    }
+                    _success = true;
+                    Navigation.NavigateTo("/");
+                }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _error = "Invalid credentials.";
+            }
+            else
+            {
+                _error = "Login failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public class LoginModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+    public class LoginResult
+    {
+        public string Token { get; set; } = string.Empty;
+        public string? Name { get; set; }
+        public string? Email { get; set; }
+    }
+    public class NegotiateResponse
+    {
+        public string? Token { get; set; }
+        public string? Error { get; set; }
+    }
+}

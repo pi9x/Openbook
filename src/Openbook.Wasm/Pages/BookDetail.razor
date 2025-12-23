@@ -1,0 +1,125 @@
+@page "/book/{BookId:guid}"
+@inject HttpClient Http
+@using Openbook.Wasm.Models
+@using Openbook.Wasm.Services
+@inject SignalRService SignalRService
+
+<h1>Book Detail</h1>
+@if (_unauthorized)
+{
+    <p>Unauthorized</p>
+}
+else if (_book == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <h2>@_book.Title</h2>
+    <h3>Author</h3>
+    <p>@_book.Author?.Name</p>
+    <p>@_book.Author?.Bio</p>
+    <h3>Reviews</h3>
+    @if (_book.Reviews == null || !_book.Reviews.Any())
+    {
+        <p>No reviews yet.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var review in _book.Reviews)
+            {
+                <li>
+                    @review.Content (@review.Rating/5)
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public Guid BookId { get; set; }
+    Book? _book;
+    bool _unauthorized;
+    protected override async Task OnInitializedAsync()
+    {
+        await TrySubscribeToSignalR();
+
+        var query = @"query BookById { bookById(id: """ + BookId + @""") { bookId title author { authorId name bio } reviews { reviewId bookId rating content } } }";
+        var request = new { query };
+        var response = await Http.PostAsJsonAsync("/api/graphql", request);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            _unauthorized = true;
+            _book = null;
+            return;
+        }
+        if (response.IsSuccessStatusCode)
+        {
+            var gqlResult = await response.Content.ReadFromJsonAsync<GraphQLBookByIdResponse>();
+            _book = gqlResult?.Data?.BookById;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        SignalRService.Connected += SubscribeToSignalR;
+        SignalRService.Disconnected += UnsubscribeFromSignalR;
+    }
+
+    public void Dispose()
+    {
+        SignalRService.Connected -= SubscribeToSignalR;
+        SignalRService.Disconnected -= UnsubscribeFromSignalR;
+        UnsubscribeFromSignalR();
+    }
+
+    private async Task TrySubscribeToSignalR()
+    {
+        if (SignalRService.IsConnected)
+        {
+            SubscribeToSignalR();
+        }
+    }
+
+    private void SubscribeToSignalR()
+    {
+        SignalRService.On<ReviewCreatedPayload>("ReviewCreated", payload =>
+        {
+            Console.WriteLine(payload);
+            if (payload.BookId != BookId) return;
+            if (_book == null) return;
+            if (_book.Reviews == null) _book.Reviews = new List<Review>();
+            _book.Reviews.Add(new Review
+            {
+                ReviewId = payload.ReviewId,
+                BookId = payload.BookId,
+                Rating = payload.Rating,
+                Content = payload.Content
+            });
+            StateHasChanged();
+        });
+    }
+
+    private void UnsubscribeFromSignalR()
+    {
+        SignalRService.Off("ReviewCreated");
+    }
+
+    public record GraphQLBookByIdResponse
+    {
+        public BookByIdData? Data { get; set; }
+    }
+    public record BookByIdData
+    {
+        public Book? BookById { get; set; }
+    }
+    public record ReviewCreatedPayload
+    {
+        public Guid ReviewId { get; set; }
+        public Guid BookId { get; set; }
+        public int Rating { get; set; }
+        public string Content { get; set; } = string.Empty;
+    }
+}

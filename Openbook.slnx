@@ -6,4 +6,5 @@
   <Project Path="src/Openbook.Domain/Openbook.Domain.csproj" />
   <Project Path="src/Openbook.GraphQL/Openbook.GraphQL.csproj" />
   <Project Path="src/Openbook.Identity/Openbook.Identity.csproj" />
+  <Project Path="src/Openbook.Wasm/Openbook.Wasm.csproj" />
 </Solution>

@@ -1,0 +1,57 @@
+﻿@using Openbook.Wasm.Services
+@inherits LayoutComponentBase
+@inject Openbook.Wasm.Services.AuthStateService AuthState
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject SignalRService SignalRService
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu/>
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            @if (AuthState.IsAuthenticated)
+            {
+                <span>Hello, @AuthState.UserName!</span>
+                <a href="#" class="ms-2" @onclick="Logout">Log out</a>
+            }
+            else
+            {
+                <a href="/login">Log in</a>
+            }
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        AuthState.AuthStateChanged += OnAuthStateChanged;
+        await AuthState.LoadAsync();
+    }
+
+    private void OnAuthStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Logout()
+    {
+        await AuthState.LogoutAsync();
+        Http.SetJwtAuthorizationHeader("");
+        await SignalRService.DisconnectAsync();
+        Navigation.NavigateTo("/login", true);
+    }
+
+    public void Dispose()
+    {
+        AuthState.AuthStateChanged -= OnAuthStateChanged;
+    }
+}

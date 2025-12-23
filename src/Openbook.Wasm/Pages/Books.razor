@@ -1,0 +1,95 @@
+@page "/books"
+
+@using Openbook.Wasm.Models
+@using Openbook.Wasm.Services
+@inject HttpClient Http
+
+<h1>Books</h1>
+
+@if (_unauthorized)
+{
+    <p>Unauthorized</p>
+}
+else if (_books == null)
+{
+    <p>Loading...</p>
+}
+else if (_books.Count == 0)
+{
+    <p>No books found.</p>
+}
+else
+{
+    <ul>
+        @foreach (var book in _books)
+        {
+            <li>
+                <a href="/book/@book.BookId">@book.Title</a> by @book.Author?.Name
+                @if (book.Reviews?.Count > 0)
+                {
+                    <details>
+                        <summary>Reviews (@book.Reviews.Count)</summary>
+                        <ul>
+                            @foreach (var review in book.Reviews)
+                            {
+                                <li>
+                                    @review.Content (Rating: @review.Rating)
+                                </li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    List<Book>? _books;
+    bool _unauthorized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var query = @"query Books { books { nodes { bookId title author { authorId name bio } reviews { reviewId bookId rating content } } } }";
+        var request = new
+        {
+            query
+        };
+        var response = await Http.PostAsJsonAsync("/api/graphql", request);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            _unauthorized = true;
+            _books = null;
+            return;
+        }
+        if (response.IsSuccessStatusCode)
+        {
+            var gqlResult = await response.Content.ReadFromJsonAsync<GraphQlBooksResponse>();
+            _books = gqlResult?.Data?.Books?.Nodes ?? [];
+        }
+        else
+        {
+            _books = [];
+        }
+    }
+
+    public class GraphQlBooksResponse
+    {
+        public BooksData? Data { get; set; }
+    }
+    public class BooksData
+    {
+        public BooksConnection? Books { get; set; }
+    }
+    public class BooksConnection
+    {
+        public List<Book>? Nodes { get; set; }
+    }
+    public class ReviewCreatedPayload
+    {
+        public Guid ReviewId { get; set; }
+        public Guid BookId { get; set; }
+        public int Rating { get; set; }
+        public string Content { get; set; } = string.Empty;
+    }
+}
