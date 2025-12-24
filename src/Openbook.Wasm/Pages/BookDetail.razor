@@ -3,6 +3,7 @@
 @using Openbook.Wasm.Models
 @using Openbook.Wasm.Services
 @inject SignalRService SignalRService
+@inject IJSRuntime JS
 
 <h1>Book Detail</h1>
 @if (_unauthorized)
@@ -19,6 +20,7 @@ else
     <h3>Author</h3>
     <p>@_book.Author?.Name</p>
     <p>@_book.Author?.Bio</p>
+
     <h3>Reviews</h3>
     @if (_book.Reviews == null || !_book.Reviews.Any())
     {
@@ -35,30 +37,54 @@ else
             }
         </ul>
     }
+
+    <hr />
+
+    <section>
+        <h3>Add a review</h3>
+
+        <div>
+            <label>Rating</label><br />
+            <select @bind="_newRating">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+        </div>
+
+        <div style="margin-top:8px;">
+            <label>Content</label><br />
+            <textarea @bind="_newContent" rows="4" cols="60"></textarea>
+        </div>
+
+        <div style="margin-top:8px;">
+            <button @onclick="CreateReview" disabled="@_busy">Submit Review</button>
+            @if (!string.IsNullOrEmpty(_createError))
+            {
+                <span style="color:red;margin-left:8px;">@_createError</span>
+            }
+        </div>
+    </section>
 }
 
 @code {
     [Parameter] public Guid BookId { get; set; }
+
     Book? _book;
     bool _unauthorized;
+    bool _busy;
+
+    // New review form
+    int _newRating = 5;
+    string _newContent = string.Empty;
+    string? _createError;
+
     protected override async Task OnInitializedAsync()
     {
         await TrySubscribeToSignalR();
-
-        var query = @"query BookById { bookById(id: """ + BookId + @""") { bookId title author { authorId name bio } reviews { reviewId bookId rating content } } }";
-        var request = new { query };
-        var response = await Http.PostAsJsonAsync("/api/graphql", request);
-        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
-        {
-            _unauthorized = true;
-            _book = null;
-            return;
-        }
-        if (response.IsSuccessStatusCode)
-        {
-            var gqlResult = await response.Content.ReadFromJsonAsync<GraphQLBookByIdResponse>();
-            _book = gqlResult?.Data?.BookById;
-        }
+        await LoadBook();
     }
 
     protected override void OnInitialized()
@@ -75,6 +101,98 @@ else
         UnsubscribeFromSignalR();
     }
 
+    private async Task LoadBook()
+    {
+        var request = new
+        {
+            query = GraphQLQueries.BookById,
+            variables = new { id = BookId.ToString() }
+        };
+        var response = await Http.PostAsJsonAsync("/api/graphql", request);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            _unauthorized = true;
+            _book = null;
+            return;
+        }
+        if (response.IsSuccessStatusCode)
+        {
+            var gqlResult = await response.Content.ReadFromJsonAsync<GraphQLBookByIdResponse>();
+            _book = gqlResult?.Data?.BookById;
+        }
+    }
+
+    private async Task CreateReview()
+    {
+        _createError = null;
+
+        if (_newRating < 1 || _newRating > 5)
+        {
+            _createError = "Select a rating between 1 and 5.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_newContent))
+        {
+            _createError = "Content is required.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var request = new
+            {
+                query = GraphQLMutations.CreateReview,
+                variables = new { bookId = BookId.ToString(), rating = _newRating, content = _newContent }
+            };
+            var response = await Http.PostAsJsonAsync("/api/graphql", request);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _unauthorized = true;
+                return;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var gqlResult = await response.Content.ReadFromJsonAsync<CreateReviewResponse>();
+                var created = gqlResult?.Data?.CreateReview;
+                if (created != null)
+                {
+                    // If SignalR is available, server may broadcast the created review; to be safe, append locally if needed:
+                    if (_book == null) await LoadBook();
+                    else
+                    {
+                        if (_book.Reviews == null) _book.Reviews = new List<Review>();
+                        _book.Reviews.Add(new Review
+                        {
+                            ReviewId = created.ReviewId,
+                            BookId = created.BookId,
+                            Rating = created.Rating,
+                            Content = created.Content
+                        });
+                    }
+
+                    // reset form
+                    _newRating = 5;
+                    _newContent = string.Empty;
+                }
+                else
+                {
+                    _createError = "Failed to create review.";
+                }
+            }
+            else
+            {
+                _createError = $"Create failed: {response.StatusCode}";
+            }
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task TrySubscribeToSignalR()
     {
         if (SignalRService.IsConnected)
@@ -87,18 +205,21 @@ else
     {
         SignalRService.On<ReviewCreatedPayload>("ReviewCreated", payload =>
         {
-            Console.WriteLine(payload);
             if (payload.BookId != BookId) return;
             if (_book == null) return;
             if (_book.Reviews == null) _book.Reviews = new List<Review>();
-            _book.Reviews.Add(new Review
+            // avoid duplicate if already present
+            if (!_book.Reviews.Any(r => r.ReviewId == payload.ReviewId))
             {
-                ReviewId = payload.ReviewId,
-                BookId = payload.BookId,
-                Rating = payload.Rating,
-                Content = payload.Content
-            });
-            StateHasChanged();
+                _book.Reviews.Add(new Review
+                {
+                    ReviewId = payload.ReviewId,
+                    BookId = payload.BookId,
+                    Rating = payload.Rating,
+                    Content = payload.Content
+                });
+                StateHasChanged();
+            }
         });
     }
 
@@ -106,6 +227,8 @@ else
     {
         SignalRService.Off("ReviewCreated");
     }
+
+    // DTOs
 
     public record GraphQLBookByIdResponse
     {
@@ -115,6 +238,25 @@ else
     {
         public Book? BookById { get; set; }
     }
+
+    public class CreateReviewResponse
+    {
+        public CreateReviewData? Data { get; set; }
+    }
+    public class CreateReviewData
+    {
+        public ReviewDto? CreateReview { get; set; }
+    }
+
+    // server returns review fields: reviewId, bookId, rating, content
+    public class ReviewDto
+    {
+        public Guid ReviewId { get; set; }
+        public Guid BookId { get; set; }
+        public int Rating { get; set; }
+        public string Content { get; set; } = string.Empty;
+    }
+
     public record ReviewCreatedPayload
     {
         public Guid ReviewId { get; set; }

@@ -3,11 +3,13 @@ using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Azure.SignalR.Management;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Openbook.AzureFunctions.Authorization;
 
 namespace Openbook.AzureFunctions.Functions;
 
 public class SignalRNegotiate(IConfiguration configuration)
 {
+    [FunctionAuthorize]
     [Function("negotiate")]
     public async Task<HttpResponseData> Negotiate(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get")] HttpRequestData req,

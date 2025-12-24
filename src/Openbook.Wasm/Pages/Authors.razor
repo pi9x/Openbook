@@ -1,0 +1,334 @@
+@page "/authors"
+
+@using Openbook.Wasm.Models
+@using Openbook.Wasm.Services
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<h1>Authors</h1>
+
+@if (_unauthorized)
+{
+    <p>Unauthorized</p>
+}
+else
+{
+    <section>
+        <h2>Create Author</h2>
+        <div>
+            <label>Name</label><br />
+            <input @bind="_createName" />
+        </div>
+        <div>
+            <label>Bio</label><br />
+            <textarea @bind="_createBio"></textarea>
+        </div>
+        <div style="margin-top:8px;">
+            <button @onclick="CreateAuthor" disabled="@_busy">Create</button>
+            @if (!string.IsNullOrEmpty(_createError))
+            {
+                <span style="color:red;margin-left:8px;">@_createError</span>
+            }
+        </div>
+    </section>
+
+    <hr />
+
+    @if (_authors == null)
+    {
+        <p>Loading authors...</p>
+    }
+    else if (_authors.Count == 0)
+    {
+        <p>No authors found.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var author in _authors)
+            {
+                <li style="margin-bottom:12px;">
+                    @if (_editingAuthorId == author.AuthorId)
+                    {
+                        <div>
+                            <input @bind="_editName" placeholder="Name" />
+                            <br />
+                            <textarea @bind="_editBio" placeholder="Bio"></textarea>
+                            <br />
+                            <button @onclick="() => SaveEdit(author.AuthorId)" disabled="@_busy">Save</button>
+                            <button @onclick="CancelEdit" disabled="@_busy">Cancel</button>
+                            @if (!string.IsNullOrEmpty(_editError))
+                            {
+                                <div style="color:red;">@_editError</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div><strong>@author.Name</strong></div>
+                        <div>@author.Bio</div>
+                        <div style="margin-top:6px;">
+                            <button @onclick="() => StartEdit(author)" disabled="@_busy">Edit</button>
+                            <button @onclick="() => DeleteAuthor(author.AuthorId)" disabled="@_busy">Delete</button>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    List<Author>? _authors;
+    bool _unauthorized;
+    bool _busy;
+
+    // Create
+    string _createName = string.Empty;
+    string _createBio = string.Empty;
+    string? _createError;
+
+    // Edit
+    Guid? _editingAuthorId;
+    string _editName = string.Empty;
+    string _editBio = string.Empty;
+    string? _editError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuthors();
+    }
+
+    private async Task LoadAuthors()
+    {
+        var request = new { query = GraphQLQueries.Authors };
+        var response = await Http.PostAsJsonAsync("/api/graphql", request);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            _unauthorized = true;
+            _authors = null;
+            return;
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var gql = await response.Content.ReadFromJsonAsync<AuthorsResponse>();
+            _authors = gql?.Data?.Authors?.Nodes ?? new List<Author>();
+        }
+        else
+        {
+            _authors = new List<Author>();
+        }
+    }
+
+    private async Task CreateAuthor()
+    {
+        if (string.IsNullOrWhiteSpace(_createName))
+        {
+            _createError = "Name is required.";
+            return;
+        }
+
+        _createError = null;
+        _busy = true;
+        try
+        {
+            var request = new
+            {
+                query = GraphQLMutations.CreateAuthor,
+                variables = new { name = _createName, bio = _createBio }
+            };
+            var response = await Http.PostAsJsonAsync("/api/graphql", request);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _unauthorized = true;
+                return;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var gql = await response.Content.ReadFromJsonAsync<CreateAuthorResponse>();
+                var created = gql?.Data?.CreateAuthor;
+                if (created != null)
+                {
+                    await LoadAuthors();
+                    _createName = string.Empty;
+                    _createBio = string.Empty;
+                }
+                else
+                {
+                    _createError = "Failed to create author.";
+                }
+            }
+            else
+            {
+                _createError = $"Create failed: {response.StatusCode}";
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartEdit(Author author)
+    {
+        _editingAuthorId = author.AuthorId;
+        _editName = author.Name ?? string.Empty;
+        _editBio = author.Bio ?? string.Empty;
+        _editError = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editingAuthorId = null;
+        _editName = string.Empty;
+        _editBio = string.Empty;
+        _editError = null;
+    }
+
+    private async Task SaveEdit(Guid authorId)
+    {
+        if (string.IsNullOrWhiteSpace(_editName))
+        {
+            _editError = "Name is required.";
+            return;
+        }
+
+        _editError = null;
+        _busy = true;
+        try
+        {
+            var request = new
+            {
+                query = GraphQLMutations.UpdateAuthor,
+                variables = new { id = authorId.ToString(), name = _editName, bio = _editBio }
+            };
+            var response = await Http.PostAsJsonAsync("/api/graphql", request);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _unauthorized = true;
+                return;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var gql = await response.Content.ReadFromJsonAsync<UpdateAuthorResponse>();
+                var updated = gql?.Data?.UpdateAuthor;
+                if (updated != null)
+                {
+                    await LoadAuthors();
+                    CancelEdit();
+                }
+                else
+                {
+                    _editError = "Failed to update author.";
+                }
+            }
+            else
+            {
+                _editError = $"Update failed: {response.StatusCode}";
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAuthor(Guid authorId)
+    {
+        if (!await JsConfirm("Are you sure you want to delete this author?")) return;
+
+        _busy = true;
+        try
+        {
+            var request = new
+            {
+                query = GraphQLMutations.DeleteAuthor,
+                variables = new { id = authorId.ToString() }
+            };
+            var response = await Http.PostAsJsonAsync("/api/graphql", request);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _unauthorized = true;
+                return;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var gql = await response.Content.ReadFromJsonAsync<DeleteAuthorResponse>();
+                var ok = gql?.Data?.DeleteAuthor ?? false;
+                if (ok)
+                {
+                    await LoadAuthors();
+                }
+                else
+                {
+                    // delete returned false
+                }
+            }
+            else
+            {
+                // HTTP error
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<bool> JsConfirm(string message)
+    {
+        try
+        {
+            return await JS.InvokeAsync<bool>("confirm", message);
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    // Response DTOs
+    public class AuthorsResponse
+    {
+        public AuthorsData? Data { get; set; }
+    }
+    public class AuthorsData
+    {
+        public AuthorsConnection? Authors { get; set; }
+    }
+    public class AuthorsConnection
+    {
+        public List<Author>? Nodes { get; set; }
+    }
+
+    public class CreateAuthorResponse
+    {
+        public CreateAuthorData? Data { get; set; }
+    }
+    public class CreateAuthorData
+    {
+        public Author? CreateAuthor { get; set; }
+    }
+
+    public class UpdateAuthorResponse
+    {
+        public UpdateAuthorData? Data { get; set; }
+    }
+    public class UpdateAuthorData
+    {
+        public Author? UpdateAuthor { get; set; }
+    }
+
+    public class DeleteAuthorResponse
+    {
+        public DeleteAuthorData? Data { get; set; }
+    }
+    public class DeleteAuthorData
+    {
+        public bool? DeleteAuthor { get; set; }
+    }
+}

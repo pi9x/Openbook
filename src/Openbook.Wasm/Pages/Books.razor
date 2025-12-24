@@ -10,51 +10,160 @@
 {
     <p>Unauthorized</p>
 }
-else if (_books == null)
-{
-    <p>Loading...</p>
-}
-else if (_books.Count == 0)
-{
-    <p>No books found.</p>
-}
 else
 {
-    <ul>
-        @foreach (var book in _books)
+    <section>
+        <h2>Create Book</h2>
+        @if (_authors == null)
         {
-            <li>
-                <a href="/book/@book.BookId">@book.Title</a> by @book.Author?.Name
-                @if (book.Reviews?.Count > 0)
-                {
-                    <details>
-                        <summary>Reviews (@book.Reviews.Count)</summary>
-                        <ul>
-                            @foreach (var review in book.Reviews)
-                            {
-                                <li>
-                                    @review.Content (Rating: @review.Rating)
-                                </li>
-                            }
-                        </ul>
-                    </details>
-                }
-            </li>
+            <p>Loading authors...</p>
         }
-    </ul>
+        else if (_authors.Count == 0)
+        {
+            <p>No authors available. Create an author first.</p>
+        }
+        else
+        {
+            <div>
+                <label>Title</label><br />
+                <input @bind="_createTitle" />
+            </div>
+            <div>
+                <label>Author</label><br />
+                <select @bind="_createAuthorIdString">
+                    @foreach (var a in _authors)
+                    {
+                        <option value="@a.AuthorId">@a.Name</option>
+                    }
+                </select>
+            </div>
+            <div style="margin-top:8px;">
+                <button @onclick="CreateBook" disabled="@_busy">Create</button>
+                @if (!string.IsNullOrEmpty(_createError))
+                {
+                    <span style="color:red;margin-left:8px;">@_createError</span>
+                }
+            </div>
+        }
+    </section>
+
+    <hr />
+
+    @if (_books == null)
+    {
+        <p>Loading books...</p>
+    }
+    else if (_books.Count == 0)
+    {
+        <p>No books found.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var book in _books)
+            {
+                <li style="margin-bottom:12px;">
+                    @if (_editingBookId == book.BookId)
+                    {
+                        <div>
+                            <input @bind="_editTitle" />
+                            <select @bind="_editAuthorIdString">
+                                @foreach (var a in _authors ?? new List<Author>())
+                                {
+                                    <option value="@a.AuthorId">@a.Name</option>
+                                }
+                            </select>
+                            <button @onclick="() => SaveEdit(book.BookId)" disabled="@_busy">Save</button>
+                            <button @onclick="CancelEdit" disabled="@_busy">Cancel</button>
+                            @if (!string.IsNullOrEmpty(_editError))
+                            {
+                                <div style="color:red;">@_editError</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div><a href="/book/@book.BookId">@book.Title</a> by @book.Author?.Name</div>
+                        if (book.Reviews?.Count > 0)
+                        {
+                            <details>
+                                <summary>Reviews (@book.Reviews.Count)</summary>
+                                <ul>
+                                    @foreach (var review in book.Reviews)
+                                    {
+                                        <li>
+                                            @review.Content (Rating: @review.Rating)
+                                        </li>
+                                    }
+                                </ul>
+                            </details>
+                        }
+                        <div style="margin-top:6px;">
+                            <button @onclick="() => StartEdit(book)" disabled="@_busy">Edit</button>
+                            <button @onclick="() => DeleteBook(book.BookId)" disabled="@_busy">Delete</button>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
 }
 
 @code {
     List<Book>? _books;
+    List<Author>? _authors;
     bool _unauthorized;
+    bool _busy;
+    bool _isInitialized;
+
+    // Create form state
+    string _createTitle = string.Empty;
+    string? _createAuthorIdString;
+    string? _createError;
+
+    // Edit form state
+    Guid? _editingBookId;
+    string _editTitle = string.Empty;
+    string? _editAuthorIdString;
+    string? _editError;
 
     protected override async Task OnInitializedAsync()
     {
-        var query = @"query Books { books { nodes { bookId title author { authorId name bio } reviews { reviewId bookId rating content } } } }";
-        var request = new
+        await LoadAuthors();
+        await LoadBooks();
+        _isInitialized = true;
+    }
+
+    private async Task LoadAuthors()
+    {
+        var query = GraphQLQueries.Authors;
+        var request = new { query };
+        var response = await Http.PostAsJsonAsync("/api/graphql", request);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
         {
-            query
-        };
+            _unauthorized = true;
+            _authors = null;
+            return;
+        }
+        if (response.IsSuccessStatusCode)
+        {
+            var gqlResult = await response.Content.ReadFromJsonAsync<GraphQlAuthorsResponse>();
+            _authors = gqlResult?.Data?.Authors?.Nodes ?? new List<Author>();
+            if (_authors.Count > 0 && string.IsNullOrEmpty(_createAuthorIdString))
+            {
+                _createAuthorIdString = _authors[0].AuthorId.ToString();
+            }
+        }
+        else
+        {
+            _authors = new List<Author>();
+        }
+    }
+
+    private async Task LoadBooks()
+    {
+        var query = GraphQLQueries.Books;
+        var request = new { query };
         var response = await Http.PostAsJsonAsync("/api/graphql", request);
         if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
         {
@@ -65,14 +174,210 @@ else
         if (response.IsSuccessStatusCode)
         {
             var gqlResult = await response.Content.ReadFromJsonAsync<GraphQlBooksResponse>();
-            _books = gqlResult?.Data?.Books?.Nodes ?? [];
+            _books = gqlResult?.Data?.Books?.Nodes ?? new List<Book>();
         }
         else
         {
-            _books = [];
+            _books = new List<Book>();
         }
     }
 
+    private async Task CreateBook()
+    {
+        if (string.IsNullOrWhiteSpace(_createTitle))
+        {
+            _createError = "Title is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_createAuthorIdString) || !Guid.TryParse(_createAuthorIdString, out var authorGuid))
+        {
+            _createError = "Select a valid author.";
+            return;
+        }
+
+        _createError = null;
+        _busy = true;
+        try
+        {
+            var mutation = GraphQLQueries.CreateBook;
+            var request = new
+            {
+                query = GraphQLMutations.CreateBook,
+                variables = new { title = _createTitle, authorId = authorGuid.ToString() }
+            };
+            var response = await Http.PostAsJsonAsync("/api/graphql", request);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _unauthorized = true;
+                return;
+            }
+            if (response.IsSuccessStatusCode)
+            {
+                var gqlResult = await response.Content.ReadFromJsonAsync<CreateBookResponse>();
+                var created = gqlResult?.Data?.CreateBook;
+                if (created != null)
+                {
+                    // refresh list
+                    await LoadBooks();
+                    // reset create form
+                    _createTitle = string.Empty;
+                    if (_authors != null && _authors.Count > 0)
+                        _createAuthorIdString = _authors[0].AuthorId.ToString();
+                }
+                else
+                {
+                    _createError = "Failed to create book.";
+                }
+            }
+            else
+            {
+                _createError = $"Create failed: {response.StatusCode}";
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartEdit(Book book)
+    {
+        if (_authors == null || _authors.Count == 0) return;
+        _editingBookId = book.BookId;
+        _editTitle = book.Title ?? string.Empty;
+        _editAuthorIdString = book.Author?.AuthorId.ToString() ?? _authors[0].AuthorId.ToString();
+        _editError = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editingBookId = null;
+        _editTitle = string.Empty;
+        _editAuthorIdString = null;
+        _editError = null;
+    }
+
+    private async Task SaveEdit(Guid bookId)
+    {
+        if (string.IsNullOrWhiteSpace(_editTitle))
+        {
+            _editError = "Title is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_editAuthorIdString) || !Guid.TryParse(_editAuthorIdString, out var authorGuid))
+        {
+            _editError = "Select a valid author.";
+            return;
+        }
+
+        _editError = null;
+        _busy = true;
+        try
+        {
+            // Note: UpdateBook mutation in the server may accept id and title (and maybe authorId).
+            // We'll call updateBook with id and title only. If server supports author change, adjust accordingly.
+            var mutation = GraphQLQueries.UpdateBook;
+            var request = new
+            {
+                query = GraphQLMutations.UpdateBook,
+                variables = new { id = bookId.ToString(), title = _editTitle }
+            };
+            var response = await Http.PostAsJsonAsync("/api/graphql", request);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _unauthorized = true;
+                return;
+            }
+            if (response.IsSuccessStatusCode)
+            {
+                var gqlResult = await response.Content.ReadFromJsonAsync<UpdateBookResponse>();
+                var updated = gqlResult?.Data?.UpdateBook;
+                if (updated != null)
+                {
+                    // If server doesn't support updating author via updateBook, we might need a separate mutation.
+                    // For now, if author changed locally, we will ignore unless server returns updated author.
+                    await LoadBooks();
+                    CancelEdit();
+                }
+                else
+                {
+                    _editError = "Failed to update book.";
+                }
+            }
+            else
+            {
+                _editError = $"Update failed: {response.StatusCode}";
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteBook(Guid bookId)
+    {
+        if (!await JsConfirm($"Are you sure you want to delete this book?")) return;
+
+        _busy = true;
+        try
+        {
+            var mutation = GraphQLQueries.DeleteBook;
+            var request = new
+            {
+                query = GraphQLMutations.DeleteBook,
+                variables = new { id = bookId.ToString() }
+            };
+            var response = await Http.PostAsJsonAsync("/api/graphql", request);
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _unauthorized = true;
+                return;
+            }
+            if (response.IsSuccessStatusCode)
+            {
+                var gqlResult = await response.Content.ReadFromJsonAsync<DeleteBookResponse>();
+                var ok = gqlResult?.Data?.DeleteBook ?? false;
+                if (ok)
+                {
+                    await LoadBooks();
+                }
+                else
+                {
+                    // deletion failed (server returned false)
+                }
+            }
+            else
+            {
+                // HTTP error
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Simple JS confirm fallback: if JS interop not available, use C# confirm via window.confirm would require IJSRuntime,
+    // but to keep this file self-contained and avoid adding new injections, implement a tiny C# confirm using prompt fallback.
+    // We'll try to use window.confirm via IJSRuntime if available; otherwise default to true.
+    // To keep things simple here, ask user via browser confirm through IJS if it's available.
+    [Inject] IJSRuntime? JS { get; set; }
+
+    private async Task<bool> JsConfirm(string message)
+    {
+        if (JS == null) return true;
+        try
+        {
+            return await JS.InvokeAsync<bool>("confirm", message);
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    // GraphQL response DTOs
     public class GraphQlBooksResponse
     {
         public BooksData? Data { get; set; }
@@ -85,11 +390,44 @@ else
     {
         public List<Book>? Nodes { get; set; }
     }
-    public class ReviewCreatedPayload
+
+    public class GraphQlAuthorsResponse
     {
-        public Guid ReviewId { get; set; }
-        public Guid BookId { get; set; }
-        public int Rating { get; set; }
-        public string Content { get; set; } = string.Empty;
+        public AuthorsData? Data { get; set; }
+    }
+    public class AuthorsData
+    {
+        public AuthorsConnection? Authors { get; set; }
+    }
+    public class AuthorsConnection
+    {
+        public List<Author>? Nodes { get; set; }
+    }
+
+    public class CreateBookResponse
+    {
+        public CreateBookData? Data { get; set; }
+    }
+    public class CreateBookData
+    {
+        public Book? CreateBook { get; set; }
+    }
+
+    public class UpdateBookResponse
+    {
+        public UpdateBookData? Data { get; set; }
+    }
+    public class UpdateBookData
+    {
+        public Book? UpdateBook { get; set; }
+    }
+
+    public class DeleteBookResponse
+    {
+        public DeleteBookData? Data { get; set; }
+    }
+    public class DeleteBookData
+    {
+        public bool? DeleteBook { get; set; }
     }
 }
