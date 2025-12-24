@@ -162,7 +162,8 @@ else
                     if (_book == null) await LoadBook();
                     else
                     {
-                        if (_book.Reviews == null) _book.Reviews = new List<Review>();
+                        _book.Reviews ??= [];
+                        if (_book.Reviews.Any(r => r.ReviewId == created.ReviewId)) return;
                         _book.Reviews.Add(new Review
                         {
                             ReviewId = created.ReviewId,
@@ -207,19 +208,17 @@ else
         {
             if (payload.BookId != BookId) return;
             if (_book == null) return;
-            if (_book.Reviews == null) _book.Reviews = new List<Review>();
+            _book.Reviews ??= [];
             // avoid duplicate if already present
-            if (!_book.Reviews.Any(r => r.ReviewId == payload.ReviewId))
+            if (_book.Reviews.Any(r => r.ReviewId == payload.ReviewId)) return;
+            _book.Reviews.Add(new Review
             {
-                _book.Reviews.Add(new Review
-                {
-                    ReviewId = payload.ReviewId,
-                    BookId = payload.BookId,
-                    Rating = payload.Rating,
-                    Content = payload.Content
-                });
-                StateHasChanged();
-            }
+                ReviewId = payload.ReviewId,
+                BookId = payload.BookId,
+                Rating = payload.Rating,
+                Content = payload.Content
+            });
+            StateHasChanged();
         });
     }
 

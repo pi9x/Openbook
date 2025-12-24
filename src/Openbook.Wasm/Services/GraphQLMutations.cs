@@ -35,7 +35,7 @@ namespace Openbook.Wasm.Services
 
         // Authors
         public static readonly string CreateAuthor = @"
-mutation CreateAuthor($name: String, $bio: String) {
+mutation CreateAuthor($name: String!, $bio: String) {
   createAuthor(name: $name, bio: $bio) {
     " + AuthorFields + @"
   }
@@ -43,7 +43,7 @@ mutation CreateAuthor($name: String, $bio: String) {
 ";
 
         public static readonly string UpdateAuthor = @"
-mutation UpdateAuthor($id: String!, $name: String, $bio: String) {
+mutation UpdateAuthor($id: String!, $name: String!, $bio: String) {
   updateAuthor(id: $id, name: $name, bio: $bio) {
     " + AuthorFields + @"
   }
@@ -68,7 +68,7 @@ mutation CreateBook($title: String!, $authorId: String!) {
 
         // UpdateBook currently sends id and title. If server accepts authorId for updates, extend variables and call accordingly.
         public static readonly string UpdateBook = @"
-mutation UpdateBook($id: String!, $title: String) {
+mutation UpdateBook($id: String!, $title: String!) {
   updateBook(id: $id, title: $title) {
     " + BookFields + @"
   }
@@ -83,7 +83,7 @@ mutation DeleteBook($id: String!) {
 
         // Reviews
         public static readonly string CreateReview = @"
-mutation CreateReview($bookId: String!, $rating: Int!, $content: String!) {
+mutation CreateReview($bookId: String!, $rating: Int!, $content: String) {
   createReview(bookId: $bookId, rating: $rating, content: $content) {
     " + ReviewFields + @"
   }
